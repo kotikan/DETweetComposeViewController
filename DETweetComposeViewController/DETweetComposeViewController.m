@@ -125,11 +125,26 @@ static NSString * const DETweetLastAccountIdentifier = @"DETweetLastAccountIdent
         ACAccountType *twitterAccountType = [accountStore accountTypeWithAccountTypeIdentifier:ACAccountTypeIdentifierTwitter];
         
         __block BOOL accessGranted = NO;
-        [accountStore requestAccessToAccountsWithType:twitterAccountType
-                                withCompletionHandler:^(BOOL granted, NSError *error) {
-                                    accessGranted = granted;
-                                    waitingForAccess = NO;
-                                }];
+        
+        // Check accounts for iOS5 (deprecated)
+        if ([accountStore respondsToSelector:@selector(requestAccessToAccountsWithType:withCompletionHandler:)])
+        {
+            [accountStore requestAccessToAccountsWithType:twitterAccountType
+                                    withCompletionHandler:^(BOOL granted, NSError *error) {
+                                        accessGranted = granted;
+                                        waitingForAccess = NO;
+                                    }];
+        }
+        else
+            // Check accounts for IOS6 (new SDK) : no options for Twitter
+            if ([accountStore respondsToSelector:@selector(requestAccessToAccountsWithType:options:completion:)])
+            {
+                [accountStore requestAccessToAccountsWithType:twitterAccountType options:nil completion:^(BOOL granted, NSError *error) {
+                    accessGranted = granted;
+                    waitingForAccess = NO;
+                }];
+            }
+        
         waitingForAccess = YES;
         while (waitingForAccess) {
             sleep(1);
@@ -899,6 +914,7 @@ static NSString * const DETweetLastAccountIdentifier = @"DETweetLastAccountIdent
 {
     if (self.alwaysUseDETwitterCredentials == NO && [UIDevice de_isIOS5]) {
             // Try using iOS5 Twitter credentials
+            // Beware : for iOS6, accountStore doesn't grant you privileges (default : false)
         if ([[self class] canAccessTwitterAccounts]) {
             ACAccountStore *accountStore = [[[ACAccountStore alloc] init] autorelease];
             ACAccountType *twitterAccountType = [accountStore accountTypeWithAccountTypeIdentifier:ACAccountTypeIdentifierTwitter];
@@ -908,7 +924,9 @@ static NSString * const DETweetLastAccountIdentifier = @"DETweetLastAccountIdent
             }
         }
         else {
-            [self performSelector:@selector(dismissModalViewControllerAnimated:) withObject:self afterDelay:1.0f];
+            // Patch for iOS6 :
+            [self displayNoTwitterAccountsAlert];
+            //[self performSelector:@selector(dismissModalViewControllerAnimated:) withObject:self afterDelay:1.0f];
         }
     }
     else {
